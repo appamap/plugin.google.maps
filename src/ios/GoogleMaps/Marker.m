@@ -572,6 +572,8 @@
  * @private
  * Load the icon; then set to the marker
  */
+
+
 -(void)setIcon_:(GMSMarker *)marker iconProperty:(NSDictionary *)iconProperty
    pluginResult:(CDVPluginResult *)pluginResult
      callbackId:(NSString*)callbackId {
@@ -751,72 +753,188 @@
              */
             
             
+            
             dispatch_queue_t queue = dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_HIGH, 0ul);
             dispatch_async(queue, ^{
                 
+                
                 NSURL *url = [NSURL URLWithString:iconPath];
+                NSFileManager *manager = [NSFileManager defaultManager];
+                NSArray *contents = [manager contentsOfDirectoryAtPath:[NSHomeDirectory() stringByAppendingPathComponent:@"Documents"] error:nil];
                 
-                [self downloadImageWithURL:url completionBlock:^(BOOL succeeded, UIImage *image) {
-                    
-                    if (!succeeded) {
+                NSString *theFileName = [[iconPath lastPathComponent] stringByStandardizingPath];
+                BOOL found = NO;
+                UIImage *thumbNail;
+                
+                
+                
+                for (NSString* item in contents)
+                {
+                    if ([item rangeOfString:theFileName].location != NSNotFound)
+                    {
+                        found = YES;
+                        NSArray *paths = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory,     NSUserDomainMask, YES);
+                        NSString *documentsDirectory = [paths objectAtIndex:0];
+                        NSString *getImagePath = [documentsDirectory stringByAppendingPathComponent:theFileName];
                         
-                        if(isMapped) {
-                            marker.map = self.mapCtrl.map;
-                        }
-                        
-                        [self.commandDelegate sendPluginResult:pluginResult callbackId:callbackId];
-                        return;
-                    }
-                    
-                    if (width && height) {
-                        image = [image resize:width height:height];
-                    }
-                    
-                    dispatch_async(dispatch_get_main_queue(), ^{
-                        marker.icon = image;
-                        
-                        // The `anchor` property for the icon
-                        if ([iconProperty valueForKey:@"anchor"]) {
-                            NSArray *points = [iconProperty valueForKey:@"anchor"];
-                            CGFloat anchorX = [[points objectAtIndex:0] floatValue] / image.size.width;
-                            CGFloat anchorY = [[points objectAtIndex:1] floatValue] / image.size.height;
-                            marker.groundAnchor = CGPointMake(anchorX, anchorY);
-                        }
-                        
-                        
-                        // The `infoWindowAnchor` property
-                        if ([iconProperty valueForKey:@"infoWindowAnchor"]) {
-                            NSArray *points = [iconProperty valueForKey:@"infoWindowAnchor"];
-                            CGFloat anchorX = [[points objectAtIndex:0] floatValue] / image.size.width;
-                            CGFloat anchorY = [[points objectAtIndex:1] floatValue] / image.size.height;
-                            marker.infoWindowAnchor = CGPointMake(anchorX, anchorY);
-                        }
-                        
-                        if (isMapped) {
-                            marker.map = self.mapCtrl.map;
-                        }
-                        
-                        
-                        if (animation) {
-                            // Do animation, then send the result
-                            if (self.mapCtrl.debuggable) {
-                                NSLog(@"---- do animation animation = %@", animation);
+                        if ([[NSFileManager defaultManager] fileExistsAtPath:getImagePath]) {
+                            NSLog(@"The file exists");
+                            
+                            
+                            @try {
+                                thumbNail = [UIImage imageWithContentsOfFile:getImagePath];
+                                
                             }
-                            [self setMarkerAnimation_:animation marker:marker pluginResult:pluginResult callbackId:callbackId];
+                            @catch (NSException * e) {
+                                NSLog(@"Exception: %@", e);
+                            }
+                            
+                            
+            
                         } else {
-                            // Send the result
-                            if (self.mapCtrl.debuggable) {
-                                NSLog(@"---- no marker animation");
-                            }
-                            [self.commandDelegate sendPluginResult:pluginResult callbackId:callbackId];
+                            NSLog(@"errorIS %@", error);
                         }
-                        
-                    });
-                    
-                    
-                }];
+                    }
+                }
                 
-            });
+                if(found==NO) //downlaod it
+                {
+                    [self downloadImageWithURL:url completionBlock:^(BOOL succeeded, UIImage *image)
+                     {
+                         
+                         if (!succeeded) {
+                             
+                             if(isMapped) {
+                                 marker.map = self.mapCtrl.map;
+                             }
+                             
+                             [self.commandDelegate sendPluginResult:pluginResult callbackId:callbackId];
+                             return;
+                         }
+                         
+                         if (width && height) {
+                             image = [image resize:width height:height];
+                         }
+                         
+                         dispatch_async(dispatch_get_main_queue(), ^{
+                             marker.icon = image;
+                             
+                             NSData *imageData = UIImagePNGRepresentation(image);
+                             
+                             NSArray *paths = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES);
+                             NSString *documentsDirectory = [paths objectAtIndex:0];
+                             NSString *imagePath =[documentsDirectory stringByAppendingPathComponent:[NSString stringWithFormat:@"%@",theFileName]];
+                             
+                             
+                             NSLog((@"pre writing to file"));
+                             if (![imageData writeToFile:imagePath atomically:NO])
+                             {
+                                 NSLog((@"Failed to cache image data to disk"));
+                             }
+                             else
+                             {
+                                 NSLog((@"the cachedImagedPath is %@",imagePath));
+                             }
+                             
+                             
+                             
+                             // The `anchor` property for the icon
+                             if ([iconProperty valueForKey:@"anchor"]) {
+                                 NSArray *points = [iconProperty valueForKey:@"anchor"];
+                                 CGFloat anchorX = [[points objectAtIndex:0] floatValue] / image.size.width;
+                                 CGFloat anchorY = [[points objectAtIndex:1] floatValue] / image.size.height;
+                                 marker.groundAnchor = CGPointMake(anchorX, anchorY);
+                             }
+                             
+                             
+                             // The `infoWindowAnchor` property
+                             if ([iconProperty valueForKey:@"infoWindowAnchor"]) {
+                                 NSArray *points = [iconProperty valueForKey:@"infoWindowAnchor"];
+                                 CGFloat anchorX = [[points objectAtIndex:0] floatValue] / image.size.width;
+                                 CGFloat anchorY = [[points objectAtIndex:1] floatValue] / image.size.height;
+                                 marker.infoWindowAnchor = CGPointMake(anchorX, anchorY);
+                             }
+                             
+                             if (isMapped) {
+                                 marker.map = self.mapCtrl.map;
+                             }
+                             
+                             
+                             if (animation) {
+                                 // Do animation, then send the result
+                                 if (self.mapCtrl.debuggable) {
+                                     NSLog(@"---- do animation animation = %@", animation);
+                                 }
+                                 [self setMarkerAnimation_:animation marker:marker pluginResult:pluginResult callbackId:callbackId];
+                             } else {
+                                 // Send the result
+                                 if (self.mapCtrl.debuggable) {
+                                     NSLog(@"---- no marker animation");
+                                 }
+                                 [self.commandDelegate sendPluginResult:pluginResult callbackId:callbackId];
+                             }
+                             
+                         });
+                         
+                         
+                     }]; //download cheker
+                }//if
+                
+                else
+                {
+                    if (width && height) {
+                        thumbNail = [thumbNail resize:width height:height];
+                    }
+                    
+                    
+                    marker.icon = thumbNail;
+                    
+                    
+                    
+                    
+                    
+                    // The `anchor` property for the icon
+                    if ([iconProperty valueForKey:@"anchor"]) {
+                        NSArray *points = [iconProperty valueForKey:@"anchor"];
+                        CGFloat anchorX = [[points objectAtIndex:0] floatValue] / thumbNail.size.width;
+                        CGFloat anchorY = [[points objectAtIndex:1] floatValue] / thumbNail.size.height;
+                        marker.groundAnchor = CGPointMake(anchorX, anchorY);
+                    }
+                    
+                    
+                    // The `infoWindowAnchor` property
+                    if ([iconProperty valueForKey:@"infoWindowAnchor"]) {
+                        NSArray *points = [iconProperty valueForKey:@"infoWindowAnchor"];
+                        CGFloat anchorX = [[points objectAtIndex:0] floatValue] / thumbNail.size.width;
+                        CGFloat anchorY = [[points objectAtIndex:1] floatValue] / thumbNail.size.height;
+                        marker.infoWindowAnchor = CGPointMake(anchorX, anchorY);
+                    }
+                    
+                    
+                    
+                    
+                    if (animation) {
+                        // Do animation, then send the result
+                        if (self.mapCtrl.debuggable) {
+                            NSLog(@"---- do animation animation = %@", animation);
+                        }
+                        [self setMarkerAnimation_:animation marker:marker pluginResult:pluginResult callbackId:callbackId];
+                    } else {
+                        // Send the result
+                        if (self.mapCtrl.debuggable) {
+                            NSLog(@"---- no marker animation");
+                        }
+                        [self.commandDelegate sendPluginResult:pluginResult callbackId:callbackId];
+                    }
+                    
+                    if (isMapped) {
+                        marker.map = self.mapCtrl.map;
+                    }
+                    
+                    
+                }
+                
+            }); //queue
             
             
         }
@@ -835,6 +953,9 @@
     }
     
 }
+
+
+
 
 - (void)downloadImageWithURL:(NSURL *)url completionBlock:(void (^)(BOOL succeeded, UIImage *image))completionBlock
 {
